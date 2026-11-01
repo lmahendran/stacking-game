@@ -9,11 +9,12 @@ ground_color = (124,252,0)
 ground_height = 100
 pause_color = (0,0,0)
 frame_rate = 120
-start_speed = 100 # pixels per second
-speed_increase = 20 # added to the speed after each block is placed
+start_speed = 100 # pixels per second at the start
+speed_scale = 60 # how quickly speed grows; speed = start_speed + speed_scale * sqrt(score - 1)
 high_score_file = "highscore.txt" # saved in the same folder as this script
 
 ## Modules
+import math
 import os
 import pygame
 
@@ -245,7 +246,8 @@ def game(highScore):
                         placedXR.append(overlapXR)
                         blockWidth = overlapXR-overlapXL
                         score += 1
-                        speed += speed_increase
+                        # Speed grows with the square root of the score, so each block adds less than the last
+                        speed = start_speed+speed_scale*math.sqrt(score-1)
                         placedBlocks.append(pygame.Surface((blockWidth,50)))
                         block = pygame.Surface((blockWidth,50))
                         block.fill((255,255,255))
