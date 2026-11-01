@@ -9,10 +9,12 @@ screen_color = (135,206,235)
 ground_color = (124,252,0)
 ground_height = 100
 pause_color = (0,0,0)
+frame_rate = 120
+start_speed = 100 # pixels per second
+speed_increase = 20 # added to the speed after each block is placed
 
 ## Modules
 import pygame
-from time import sleep
 
 ## Functions
 
@@ -102,10 +104,10 @@ def game():
     score = 1
     block = pygame.Surface((400,50))
     block.fill((255,255,255))
-    speed = 0.5
+    speed = start_speed
     height = 600
     direction = 1
-    movingXL = 0
+    movingXL = -400
     movingXR = movingXL+400
     placedBlocks = [block]
     placedXL = [100]
@@ -123,6 +125,8 @@ def game():
     # Game Loop
     running = True
     while running:
+        # Seconds since the last frame, capped so the block doesn't jump after a stall (e.g. dragging the window)
+        dt = min(clock.tick(frame_rate)/1000,0.05)
 
         # Background
         screen.fill(background_color)
@@ -137,30 +141,28 @@ def game():
             if event.type == pygame.KEYDOWN:
 
                 if event.key == pygame.K_SPACE:
-                    if movingXL > placedXR[-1] or movingXR < placedXL[-1]:
+                    # Snap to whole pixels so the drawn block matches the one used for the overlap
+                    droppedXL = round(movingXL)
+                    droppedXR = droppedXL+blockWidth
+                    overlapXL = max(droppedXL,placedXL[-1])
+                    overlapXR = min(droppedXR,placedXR[-1])
+                    if overlapXR <= overlapXL:
                         running = False
                         gameStatus = "over"
                     else:
-                        if movingXL > placedXL[-1] and movingXL < placedXR[-1]:
-                            placedXL.append(movingXL)
-                            placedXR.append(placedXR[-1])
-                            blockWidth -= movingXR - placedXR[-1]
-                        elif movingXL < placedXL[-1] and movingXR > placedXL[-1]:
-                            placedXL.append(placedXL[-1])
-                            placedXR.append(movingXR)
-                            blockWidth -= placedXL[-1] - movingXL
-                        elif movingXL == placedXL[-1]:
-                            placedXL.append(movingXL)
-                            placedXL.append(movingXR)
+                        perfect = abs(droppedXL-placedXL[-1]) <= 0.025*blockWidth
+                        placedXL.append(overlapXL)
+                        placedXR.append(overlapXR)
+                        blockWidth = overlapXR-overlapXL
                         score += 1
                         numBlocks += 1
-                        speed += 0.1
+                        speed += speed_increase
                         placedBlocks.append(pygame.Surface((blockWidth,50)))
                         block = pygame.Surface((blockWidth,50))
                         block.fill((255,255,255))
                         faded = False
                         fade = 0
-                        if abs(placedXL[-1]-movingXL) <= 0.025*blockWidth:
+                        if perfect:
                             placedBlocks[-1].fill((fade,255,fade))
                             greenFade = True
                         else:
@@ -197,7 +199,7 @@ def game():
             moving = True
             newBlock = False
         if moving:
-            movingXL += speed*direction
+            movingXL += speed*direction*dt
             movingXR = movingXL+blockWidth
             if (direction == 1 and movingXR > screen_size[0]) or (direction == -1 and movingXL < 0):
                 direction *= -1
@@ -209,7 +211,7 @@ def game():
 
         # Color fading
         if not faded:
-            fade += 4
+            fade += 800*dt
             if fade >= 255:
                 fade = 255
                 faded = True
@@ -240,7 +242,6 @@ def game():
                 gameStatus = "quit"
             pause = False
 
-        sleep(0.005)
         pygame.display.update()
     return gameStatus, score
         
