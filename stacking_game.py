@@ -9,12 +9,27 @@ ground_color = (124,252,0)
 ground_height = 100
 pause_color = (0,0,0)
 frame_rate = 120
-start_speed = 100 # pixels per second
-speed_increase = 20 # added to the speed after each block is placed
+start_speed = 100 # pixels per second at the start
+speed_scale = 60 # how quickly speed grows; speed = start_speed + speed_scale * sqrt(score - 1)
+perfect_tolerance = 0.025 # a drop counts as perfect within this fraction of the block width...
+perfect_min_tolerance = 4 # ...or within this many pixels, whichever is larger
+perfect_bonus = 20 # pixels added to the block width on a perfect placement (up to the starting width)
 high_score_file = "highscore.txt" # saved in the same folder as this script
+# Background colour once each score is reached: the sky goes from day to sunset to night to space as the tower grows
+background_colors = [
+    (1,screen_color),
+    (20,(80,150,220)),
+    (40,(240,150,110)),
+    (60,(120,80,150)),
+    (80,(40,40,95)),
+    (100,(12,12,30)),
+]
+stars_score = 100 # stars fade in from this score
 
 ## Modules
+import math
 import os
+import random
 import pygame
 
 ## Functions
@@ -207,10 +222,12 @@ def game(highScore):
     falling = False
     fallSpeed = 0
     fallTime = 0
-    fade = 255
-    greenFade = False
-    faded = True
-    background_color = screen_color
+    fadingBlocks = [] # recently placed blocks still fading from their highlight back to white
+    background_color = background_colors[0][1]
+    # Stars as (x, y, radius, twinkle phase), placed once per game
+    stars = [(random.uniform(0,screen_size[0]),random.uniform(0,screen_size[1]),random.choice((1,1,2)),random.uniform(0,2*math.pi)) for i in range(80)]
+    starFade = 0
+    gameTime = 0
 
     # Game Loop
     running = True
@@ -218,8 +235,17 @@ def game(highScore):
         # Seconds since the last frame, capped so the block doesn't jump after a stall (e.g. dragging the window)
         dt = min(clock.tick(frame_rate)/1000,0.05)
 
+        gameTime += dt
+
         # Background
-        screen.fill(background_color)
+        screen.fill([round(channel) for channel in background_color])
+
+        # Stars (drift down slowly as the stack scrolls, and twinkle)
+        if starFade > 0:
+            for x,y,radius,phase in stars:
+                brightness = starFade*(0.7+0.3*math.sin(gameTime*3+phase))
+                starColor = [round(channel+(255-channel)*brightness) for channel in background_color]
+                pygame.draw.circle(screen,starColor,(x,(y+groundDist*0.2)%screen_size[1]),radius)
 
         # Events
         for event in pygame.event.get():
@@ -240,23 +266,34 @@ def game(highScore):
                         falling = True
                         movingXL = droppedXL
                     else:
-                        perfect = abs(droppedXL-placedXL[-1]) <= 0.025*blockWidth
+                        perfect = abs(droppedXL-placedXL[-1]) <= max(perfect_tolerance*blockWidth,perfect_min_tolerance)
+                        if perfect:
+                            # Snap onto the block below, then widen it as a bonus (capped at the starting width)
+                            growth = min(perfect_bonus,(placedXR[0]-placedXL[0])-blockWidth)
+                            overlapXL = placedXL[-1]-growth//2
+                            overlapXR = placedXR[-1]+growth-growth//2
+                            # Keep the block on screen by moving any overflow to the other side
+                            if overlapXL < 0:
+                                overlapXR -= overlapXL
+                                overlapXL = 0
+                            if overlapXR > screen_size[0]:
+                                overlapXL -= overlapXR-screen_size[0]
+                                overlapXR = screen_size[0]
                         placedXL.append(overlapXL)
                         placedXR.append(overlapXR)
                         blockWidth = overlapXR-overlapXL
                         score += 1
-                        speed += speed_increase
+                        # Speed grows with the square root of the score, so each block adds less than the last
+                        speed = start_speed+speed_scale*math.sqrt(score-1)
                         placedBlocks.append(pygame.Surface((blockWidth,50)))
                         block = pygame.Surface((blockWidth,50))
                         block.fill((255,255,255))
-                        faded = False
-                        fade = 0
+                        # Highlight green if perfect, yellow otherwise
                         if perfect:
-                            placedBlocks[-1].fill((fade,255,fade))
-                            greenFade = True
+                            placedBlocks[-1].fill((0,255,0))
                         else:
-                            placedBlocks[-1].fill((255,255,fade))
-                            greenFade = False
+                            placedBlocks[-1].fill((255,255,0))
+                        fadingBlocks.append({"block":placedBlocks[-1],"fade":0,"perfect":perfect})
                         placedY.append(height)
                         height -= 50
                         direction *= -1
@@ -303,17 +340,14 @@ def game(highScore):
         for placedBlock,x,y in zip(placedBlocks,placedXL,placedY):
             draw_block(placedBlock,x,y)
 
-        # Color fading
-        if not faded:
-            fade += 800*dt
-            if fade >= 255:
-                fade = 255
-                faded = True
-                greenFade = False
-            if greenFade:
-                placedBlocks[-1].fill((fade,255,fade))
+        # Color fading (each block fades on its own, so placing quickly doesn't leave one stuck mid-fade)
+        for fading in fadingBlocks:
+            fading["fade"] = min(fading["fade"]+800*dt,255)
+            if fading["perfect"]:
+                fading["block"].fill((fading["fade"],255,fading["fade"]))
             else:
-                placedBlocks[-1].fill((255,255,fade))
+                fading["block"].fill((255,255,fading["fade"]))
+        fadingBlocks = [fading for fading in fadingBlocks if fading["fade"] < 255]
 
         # High score lines (at the top of the block that would match the high score)
         if highScore > 0:
@@ -324,17 +358,15 @@ def game(highScore):
         # Score
         show_score(score)
 
-        # Background change based on score
-        if score >= 10 and score < 20:
-            background_color = (66,105,47)
-        elif score >= 20 and score < 30:
-            background_color = (255,220,0)
-        elif score >= 30 and score < 40:
-            background_color = (255,94,5)
-        elif score >= 40 and score < 50:
-            background_color = (250,10,0)
-        elif score >= 50:
-            background_color = (255,0,255)
+        # Background change based on score, easing toward the new colour over about a second
+        targetColor = background_colors[0][1]
+        for bandScore,bandColor in background_colors:
+            if score >= bandScore:
+                targetColor = bandColor
+        blend = min(3*dt,1)
+        background_color = [current+(target-current)*blend for current,target in zip(background_color,targetColor)]
+        if score >= stars_score:
+            starFade = min(starFade+dt/1.5,1)
 
         if pause and running:
             if not pause_game():
