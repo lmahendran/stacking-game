@@ -86,6 +86,53 @@ def play_again(score):
         clock.tick(30)
     return gameStatus
 
+# Title Screen Function
+def title_screen():
+    picked = False
+    centerX = screen_size[0]//2
+    # Shrink the title until it fits inside the screen with some margin
+    titleSize = 64
+    titleFont = pygame.font.Font("freesansbold.ttf",titleSize)
+    while titleFont.size(game_title.upper())[0] > screen_size[0]-100:
+        titleSize -= 4
+        titleFont = pygame.font.Font("freesansbold.ttf",titleSize)
+    buttonFont = pygame.font.Font("freesansbold.ttf",32)
+    playButton = pygame.Rect(0,0,220,80)
+    playButton.center = (centerX,350)
+    quitButton = pygame.Rect(0,0,220,80)
+    quitButton.center = (centerX,460)
+
+    screen.fill(screen_color)
+    screen.blit(ground,(0,screen_size[1]-ground_height))
+    # A small stack of blocks sitting on the ground
+    for i,width in enumerate((360,300,240)):
+        block = pygame.Surface((width,50))
+        block.fill((255,255,255))
+        draw_block(block,centerX-width//2,screen_size[1]-ground_height-50*(i+1))
+    shadowText = titleFont.render(game_title.upper(),True,(0,0,0))
+    screen.blit(shadowText,shadowText.get_rect(center=(centerX+3,153)))
+    titleText = titleFont.render(game_title.upper(),True,(255,255,255))
+    screen.blit(titleText,titleText.get_rect(center=(centerX,150)))
+    for button,color,label in ((playButton,(0,255,0),"Play"),(quitButton,(255,0,0),"Quit")):
+        pygame.draw.rect(screen,color,button)
+        labelText = buttonFont.render(label,True,(0,0,0))
+        screen.blit(labelText,labelText.get_rect(center=button.center))
+    pygame.display.update()
+    while not picked:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                picked = True
+                gameStatus = "quit"
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if playButton.collidepoint(event.pos):
+                    picked = True
+                    gameStatus = "ongoing"
+                if quitButton.collidepoint(event.pos):
+                    picked = True
+                    gameStatus = "quit"
+        clock.tick(30)
+    return gameStatus
+
 # Initialization
 pygame.init()
 screen = pygame.display.set_mode(screen_size)
@@ -250,7 +297,7 @@ def game():
         
 # Main Function
 def main():
-    gameStatus = "ongoing"
+    gameStatus = title_screen()
     while gameStatus == "ongoing":
         gameStatus, score = game()
         if gameStatus == "over":
