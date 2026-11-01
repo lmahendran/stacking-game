@@ -46,7 +46,9 @@ def show_score(score):
 # Block Drawing Function (outlined so blocks stand out on any background)
 def draw_block(block,x,y):
     screen.blit(block,(x,y))
-    pygame.draw.rect(screen,(40,40,40),block.get_rect(topleft=(x,y)),2)
+    # The outline straddles the block's edge (1px outside, 1px inside), so where two blocks touch
+    # their outlines land on the same pixels and the seam is as thick as an outer edge
+    pygame.draw.rect(screen,(40,40,40),block.get_rect(topleft=(x,y)).inflate(2,2),2)
 
 # High Score Functions (a missing or unreadable file just means no high score yet)
 def load_high_score():
