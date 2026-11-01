@@ -2,7 +2,6 @@
 
 ## Variables that you can change are below:
 # If you want to remove this section, make sure to edit the following variables yourself in the main code
-global game_title, screen_size, screen_color, ground_color, ground_height, pause_color
 game_title = "Stacking Game"
 screen_size = (600,800)
 screen_color = (135,206,235)
@@ -20,18 +19,17 @@ import pygame
 
 # Score Function
 def show_score(score):
-    scoreFont = pygame.font.Font("freesansbold.ttf",64)
+    scoreCenter = (screen_size[0]//2,57)
+    # Dark shadow underneath keeps the score readable on light backgrounds
+    shadowText = scoreFont.render(str(score),True,(0,0,0))
+    screen.blit(shadowText,shadowText.get_rect(center=(scoreCenter[0]+3,scoreCenter[1]+3)))
     scoreText = scoreFont.render(str(score),True,(255,255,255))
-    if score < 10:
-        screen.blit(scoreText,(290,25))
-    else:
-        screen.blit(scoreText,(270,25))
+    screen.blit(scoreText,scoreText.get_rect(center=scoreCenter))
 
-# Click Function
-def get_latest_click():
-  if pygame.mouse.get_pressed():
-    mouseClickX,mouseClickY = pygame.mouse.get_pos()
-    return mouseClickX, mouseClickY
+# Block Drawing Function (outlined so blocks stand out on any background)
+def draw_block(block,x,y):
+    screen.blit(block,(x,y))
+    pygame.draw.rect(screen,(40,40,40),block.get_rect(topleft=(x,y)),2)
 
 # Pausing (returns False if the window was closed while paused)
 def pause_game():
@@ -79,11 +77,10 @@ def play_again(score):
                 playAgain = "picked"
                 gameStatus = "quit"
             if event.type == pygame.MOUSEBUTTONDOWN:
-                mouseClickX,mouseClickY = get_latest_click()
-                if tryAgainButton.collidepoint(mouseClickX,mouseClickY):
+                if tryAgainButton.collidepoint(event.pos):
                     playAgain = "picked"
                     gameStatus = "ongoing"
-                if quitButton.collidepoint(mouseClickX,mouseClickY):
+                if quitButton.collidepoint(event.pos):
                     playAgain = "picked"
                     gameStatus = "quit"
         clock.tick(30)
@@ -94,6 +91,7 @@ pygame.init()
 screen = pygame.display.set_mode(screen_size)
 pygame.display.set_caption(game_title)
 clock = pygame.time.Clock()
+scoreFont = pygame.font.Font("freesansbold.ttf",64)
 ground = pygame.Surface((screen_size[0],ground_height))
 ground.fill(ground_color)
 
@@ -115,8 +113,9 @@ def game():
     placedY = [650]
     groundDist = 0
     blockWidth = 400
-    numBlocks = 1
     newBlock = True
+    falling = False
+    fallSpeed = 0
     fade = 255
     greenFade = False
     faded = True
@@ -130,7 +129,6 @@ def game():
 
         # Background
         screen.fill(background_color)
-        screen.blit(ground,(0,screen_size[1]-ground_height+groundDist))
 
         # Events
         for event in pygame.event.get():
@@ -140,22 +138,22 @@ def game():
 
             if event.type == pygame.KEYDOWN:
 
-                if event.key == pygame.K_SPACE:
+                if event.key == pygame.K_SPACE and not falling:
                     # Snap to whole pixels so the drawn block matches the one used for the overlap
                     droppedXL = round(movingXL)
                     droppedXR = droppedXL+blockWidth
                     overlapXL = max(droppedXL,placedXL[-1])
                     overlapXR = min(droppedXR,placedXR[-1])
                     if overlapXR <= overlapXL:
-                        running = False
-                        gameStatus = "over"
+                        # Missed: let the block fall off the screen before ending the game
+                        falling = True
+                        movingXL = droppedXL
                     else:
                         perfect = abs(droppedXL-placedXL[-1]) <= 0.025*blockWidth
                         placedXL.append(overlapXL)
                         placedXR.append(overlapXR)
                         blockWidth = overlapXR-overlapXL
                         score += 1
-                        numBlocks += 1
                         speed += speed_increase
                         placedBlocks.append(pygame.Surface((blockWidth,50)))
                         block = pygame.Surface((blockWidth,50))
@@ -171,22 +169,17 @@ def game():
                         placedY.append(height)
                         height -= 50
                         direction *= -1
-                        moving = False
                         newBlock = True
 
                 # Pausing
                 if event.key == pygame.K_p:
                     pause = True
-            
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                mouseClickX,mouseClickY = get_latest_click()
-            
 
         # Check height
         if height < 100:
             height = 100
             groundDist += 50
-            for i in range(numBlocks):
+            for i in range(len(placedY)):
                 placedY[i] += 50
 
         # Spawn new block
@@ -196,18 +189,26 @@ def game():
             elif direction == -1:
                 movingXL = screen_size[0]
             movingXR = movingXL+blockWidth
-            moving = True
             newBlock = False
-        if moving:
+        if falling:
+            fallSpeed += 2000*dt
+            height += fallSpeed*dt
+            if height > screen_size[1]:
+                running = False
+                gameStatus = "over"
+        else:
             movingXL += speed*direction*dt
             movingXR = movingXL+blockWidth
             if (direction == 1 and movingXR > screen_size[0]) or (direction == -1 and movingXL < 0):
                 direction *= -1
-            screen.blit(block,(movingXL,height))
+        draw_block(block,movingXL,height)
+
+        # Ground (drawn after the moving block so a missed block falls behind it)
+        screen.blit(ground,(0,screen_size[1]-ground_height+groundDist))
 
         # Blocks
-        for i in range(numBlocks):
-            screen.blit(placedBlocks[i],(placedXL[i],placedY[i]))
+        for placedBlock,x,y in zip(placedBlocks,placedXL,placedY):
+            draw_block(placedBlock,x,y)
 
         # Color fading
         if not faded:
