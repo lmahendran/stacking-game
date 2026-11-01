@@ -15,10 +15,21 @@ perfect_tolerance = 0.025 # a drop counts as perfect within this fraction of the
 perfect_min_tolerance = 4 # ...or within this many pixels, whichever is larger
 perfect_bonus = 20 # pixels added to the block width on a perfect placement (up to the starting width)
 high_score_file = "highscore.txt" # saved in the same folder as this script
+# Background colour once each score is reached: the sky goes from day to sunset to night to space as the tower grows
+background_colors = [
+    (1,screen_color),
+    (20,(80,150,220)),
+    (40,(240,150,110)),
+    (60,(120,80,150)),
+    (80,(40,40,95)),
+    (100,(12,12,30)),
+]
+stars_score = 100 # stars fade in from this score
 
 ## Modules
 import math
 import os
+import random
 import pygame
 
 ## Functions
@@ -212,7 +223,11 @@ def game(highScore):
     fallSpeed = 0
     fallTime = 0
     fadingBlocks = [] # recently placed blocks still fading from their highlight back to white
-    background_color = screen_color
+    background_color = background_colors[0][1]
+    # Stars as (x, y, radius, twinkle phase), placed once per game
+    stars = [(random.uniform(0,screen_size[0]),random.uniform(0,screen_size[1]),random.choice((1,1,2)),random.uniform(0,2*math.pi)) for i in range(80)]
+    starFade = 0
+    gameTime = 0
 
     # Game Loop
     running = True
@@ -220,8 +235,17 @@ def game(highScore):
         # Seconds since the last frame, capped so the block doesn't jump after a stall (e.g. dragging the window)
         dt = min(clock.tick(frame_rate)/1000,0.05)
 
+        gameTime += dt
+
         # Background
-        screen.fill(background_color)
+        screen.fill([round(channel) for channel in background_color])
+
+        # Stars (drift down slowly as the stack scrolls, and twinkle)
+        if starFade > 0:
+            for x,y,radius,phase in stars:
+                brightness = starFade*(0.7+0.3*math.sin(gameTime*3+phase))
+                starColor = [round(channel+(255-channel)*brightness) for channel in background_color]
+                pygame.draw.circle(screen,starColor,(x,(y+groundDist*0.2)%screen_size[1]),radius)
 
         # Events
         for event in pygame.event.get():
@@ -334,17 +358,15 @@ def game(highScore):
         # Score
         show_score(score)
 
-        # Background change based on score
-        if score >= 10 and score < 20:
-            background_color = (66,105,47)
-        elif score >= 20 and score < 30:
-            background_color = (255,220,0)
-        elif score >= 30 and score < 40:
-            background_color = (255,94,5)
-        elif score >= 40 and score < 50:
-            background_color = (250,10,0)
-        elif score >= 50:
-            background_color = (255,0,255)
+        # Background change based on score, easing toward the new colour over about a second
+        targetColor = background_colors[0][1]
+        for bandScore,bandColor in background_colors:
+            if score >= bandScore:
+                targetColor = bandColor
+        blend = min(3*dt,1)
+        background_color = [current+(target-current)*blend for current,target in zip(background_color,targetColor)]
+        if score >= stars_score:
+            starFade = min(starFade+dt/1.5,1)
 
         if pause and running:
             if not pause_game():
