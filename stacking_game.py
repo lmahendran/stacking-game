@@ -11,6 +11,9 @@ pause_color = (0,0,0)
 frame_rate = 120
 start_speed = 100 # pixels per second at the start
 speed_scale = 60 # how quickly speed grows; speed = start_speed + speed_scale * sqrt(score - 1)
+perfect_tolerance = 0.025 # a drop counts as perfect within this fraction of the block width...
+perfect_min_tolerance = 4 # ...or within this many pixels, whichever is larger
+perfect_bonus = 20 # pixels added to the block width on a perfect placement (up to the starting width)
 high_score_file = "highscore.txt" # saved in the same folder as this script
 
 ## Modules
@@ -241,7 +244,19 @@ def game(highScore):
                         falling = True
                         movingXL = droppedXL
                     else:
-                        perfect = abs(droppedXL-placedXL[-1]) <= 0.025*blockWidth
+                        perfect = abs(droppedXL-placedXL[-1]) <= max(perfect_tolerance*blockWidth,perfect_min_tolerance)
+                        if perfect:
+                            # Snap onto the block below, then widen it as a bonus (capped at the starting width)
+                            growth = min(perfect_bonus,(placedXR[0]-placedXL[0])-blockWidth)
+                            overlapXL = placedXL[-1]-growth//2
+                            overlapXR = placedXR[-1]+growth-growth//2
+                            # Keep the block on screen by moving any overflow to the other side
+                            if overlapXL < 0:
+                                overlapXR -= overlapXL
+                                overlapXL = 0
+                            if overlapXR > screen_size[0]:
+                                overlapXL -= overlapXR-screen_size[0]
+                                overlapXR = screen_size[0]
                         placedXL.append(overlapXL)
                         placedXR.append(overlapXR)
                         blockWidth = overlapXR-overlapXL
