@@ -50,13 +50,26 @@ def pause_game():
     return True
 
 # Play Again Function
-def play_again():
+def play_again(score):
     playAgain = "not picked"
-    tryAgainCoords = (100,100)
-    quitCoords = (screen_size[0]-200,100)
+    centerX = screen_size[0]//2
+    titleFont = pygame.font.Font("freesansbold.ttf",64)
+    scoreFont = pygame.font.Font("freesansbold.ttf",48)
+    buttonFont = pygame.font.Font("freesansbold.ttf",32)
+    tryAgainButton = pygame.Rect(0,0,220,80)
+    tryAgainButton.center = (centerX,450)
+    quitButton = pygame.Rect(0,0,220,80)
+    quitButton.center = (centerX,570)
+
     screen.fill((0,0,0))
-    pygame.draw.rect(screen,(0,255,0),pygame.Rect(tryAgainCoords[0],tryAgainCoords[1],100,100))
-    pygame.draw.rect(screen,(255,0,0),pygame.Rect(quitCoords[0],quitCoords[1],100,100))
+    titleText = titleFont.render("GAME OVER",True,(255,255,255))
+    screen.blit(titleText,titleText.get_rect(center=(centerX,150)))
+    scoreText = scoreFont.render("Score: "+str(score),True,(255,255,255))
+    screen.blit(scoreText,scoreText.get_rect(center=(centerX,270)))
+    for button,color,label in ((tryAgainButton,(0,255,0),"Try Again"),(quitButton,(255,0,0),"Quit")):
+        pygame.draw.rect(screen,color,button)
+        labelText = buttonFont.render(label,True,(0,0,0))
+        screen.blit(labelText,labelText.get_rect(center=button.center))
     pygame.display.update()
     while playAgain == "not picked":
         for event in pygame.event.get():
@@ -65,10 +78,10 @@ def play_again():
                 gameStatus = "quit"
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mouseClickX,mouseClickY = get_latest_click()
-                if mouseClickX >= tryAgainCoords[0] and mouseClickX <= tryAgainCoords[0]+100 and mouseClickY >= tryAgainCoords[1] and mouseClickY <= tryAgainCoords[1] + 100:
+                if tryAgainButton.collidepoint(mouseClickX,mouseClickY):
                     playAgain = "picked"
                     gameStatus = "ongoing"
-                if mouseClickX >= quitCoords[0] and mouseClickX <= quitCoords[0]+100 and mouseClickY >= quitCoords[1] and mouseClickY <= quitCoords[1] + 100:
+                if quitButton.collidepoint(mouseClickX,mouseClickY):
                     playAgain = "picked"
                     gameStatus = "quit"
         clock.tick(30)
@@ -229,7 +242,7 @@ def game():
 
         sleep(0.005)
         pygame.display.update()
-    return gameStatus
+    return gameStatus, score
         
 
         
@@ -237,9 +250,9 @@ def game():
 def main():
     gameStatus = "ongoing"
     while gameStatus == "ongoing":
-        gameStatus = game()
+        gameStatus, score = game()
         if gameStatus == "over":
-            gameStatus = play_again()
+            gameStatus = play_again(score)
     pygame.quit()
 
 
