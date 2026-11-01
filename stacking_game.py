@@ -11,8 +11,10 @@ pause_color = (0,0,0)
 frame_rate = 120
 start_speed = 100 # pixels per second
 speed_increase = 20 # added to the speed after each block is placed
+high_score_file = "highscore.txt" # saved in the same folder as this script
 
 ## Modules
+import os
 import pygame
 
 ## Functions
@@ -30,6 +32,33 @@ def show_score(score):
 def draw_block(block,x,y):
     screen.blit(block,(x,y))
     pygame.draw.rect(screen,(40,40,40),block.get_rect(topleft=(x,y)),2)
+
+# High Score Functions (a missing or unreadable file just means no high score yet)
+def load_high_score():
+    try:
+        with open(high_score_path) as file:
+            return max(int(file.read().strip()),0)
+    except (OSError,ValueError):
+        return 0
+
+def save_high_score(score):
+    try:
+        with open(high_score_path,"w") as file:
+            file.write(str(score))
+    except OSError:
+        pass
+
+# High Score Line Function (progress below 1 draws the line partway across, for the sweep animation)
+def draw_best_line(y,label,progress=1):
+    lineEnd = screen_size[0]*progress
+    # Dark edge keeps the red line visible on the red background
+    pygame.draw.line(screen,(0,0,0),(0,y),(lineEnd,y),8)
+    pygame.draw.line(screen,(255,0,0),(0,y),(lineEnd,y),4)
+    if progress >= 1:
+        shadowText = labelFont.render(label,True,(0,0,0))
+        screen.blit(shadowText,shadowText.get_rect(bottomright=(screen_size[0]-6,y-4)))
+        labelText = labelFont.render(label,True,(255,0,0))
+        screen.blit(labelText,labelText.get_rect(bottomright=(screen_size[0]-8,y-6)))
 
 # Pausing (returns False if the window was closed while paused)
 def pause_game():
@@ -50,11 +79,12 @@ def pause_game():
     return True
 
 # Play Again Function
-def play_again(score):
+def play_again(score,highScore,newBest):
     playAgain = "not picked"
     centerX = screen_size[0]//2
     titleFont = pygame.font.Font("freesansbold.ttf",64)
     scoreFont = pygame.font.Font("freesansbold.ttf",48)
+    bestFont = pygame.font.Font("freesansbold.ttf",32)
     buttonFont = pygame.font.Font("freesansbold.ttf",32)
     tryAgainButton = pygame.Rect(0,0,220,80)
     tryAgainButton.center = (centerX,450)
@@ -66,6 +96,11 @@ def play_again(score):
     screen.blit(titleText,titleText.get_rect(center=(centerX,150)))
     scoreText = scoreFont.render("Score: "+str(score),True,(255,255,255))
     screen.blit(scoreText,scoreText.get_rect(center=(centerX,270)))
+    if newBest:
+        bestText = bestFont.render("New best!",True,(255,0,0))
+    else:
+        bestText = bestFont.render("Best: "+str(highScore),True,(255,255,255))
+    screen.blit(bestText,bestText.get_rect(center=(centerX,330)))
     for button,color,label in ((tryAgainButton,(0,255,0),"Try Again"),(quitButton,(255,0,0),"Quit")):
         pygame.draw.rect(screen,color,button)
         labelText = buttonFont.render(label,True,(0,0,0))
@@ -86,16 +121,71 @@ def play_again(score):
         clock.tick(30)
     return gameStatus
 
+# Title Screen Function
+def title_screen(highScore):
+    picked = False
+    centerX = screen_size[0]//2
+    # Shrink the title until it fits inside the screen with some margin
+    titleSize = 64
+    titleFont = pygame.font.Font("freesansbold.ttf",titleSize)
+    while titleFont.size(game_title.upper())[0] > screen_size[0]-100:
+        titleSize -= 4
+        titleFont = pygame.font.Font("freesansbold.ttf",titleSize)
+    buttonFont = pygame.font.Font("freesansbold.ttf",32)
+    playButton = pygame.Rect(0,0,220,80)
+    playButton.center = (centerX,350)
+    quitButton = pygame.Rect(0,0,220,80)
+    quitButton.center = (centerX,460)
+
+    screen.fill(screen_color)
+    screen.blit(ground,(0,screen_size[1]-ground_height))
+    # A small stack of blocks sitting on the ground
+    for i,width in enumerate((360,300,240)):
+        block = pygame.Surface((width,50))
+        block.fill((255,255,255))
+        draw_block(block,centerX-width//2,screen_size[1]-ground_height-50*(i+1))
+    shadowText = titleFont.render(game_title.upper(),True,(0,0,0))
+    screen.blit(shadowText,shadowText.get_rect(center=(centerX+3,153)))
+    titleText = titleFont.render(game_title.upper(),True,(255,255,255))
+    screen.blit(titleText,titleText.get_rect(center=(centerX,150)))
+    if highScore > 0:
+        bestFont = pygame.font.Font("freesansbold.ttf",32)
+        shadowText = bestFont.render("Best: "+str(highScore),True,(0,0,0))
+        screen.blit(shadowText,shadowText.get_rect(center=(centerX+2,232)))
+        bestText = bestFont.render("Best: "+str(highScore),True,(255,255,255))
+        screen.blit(bestText,bestText.get_rect(center=(centerX,230)))
+    for button,color,label in ((playButton,(0,255,0),"Play"),(quitButton,(255,0,0),"Quit")):
+        pygame.draw.rect(screen,color,button)
+        labelText = buttonFont.render(label,True,(0,0,0))
+        screen.blit(labelText,labelText.get_rect(center=button.center))
+    pygame.display.update()
+    while not picked:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                picked = True
+                gameStatus = "quit"
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if playButton.collidepoint(event.pos):
+                    picked = True
+                    gameStatus = "ongoing"
+                if quitButton.collidepoint(event.pos):
+                    picked = True
+                    gameStatus = "quit"
+        clock.tick(30)
+    return gameStatus
+
 # Initialization
 pygame.init()
 screen = pygame.display.set_mode(screen_size)
 pygame.display.set_caption(game_title)
 clock = pygame.time.Clock()
 scoreFont = pygame.font.Font("freesansbold.ttf",64)
+labelFont = pygame.font.Font("freesansbold.ttf",20)
+high_score_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),high_score_file)
 ground = pygame.Surface((screen_size[0],ground_height))
 ground.fill(ground_color)
 
-def game():
+def game(highScore):
     gameStatus = "ongoing"
     pause = False
 
@@ -116,6 +206,7 @@ def game():
     newBlock = True
     falling = False
     fallSpeed = 0
+    fallTime = 0
     fade = 255
     greenFade = False
     faded = True
@@ -191,9 +282,11 @@ def game():
             movingXR = movingXL+blockWidth
             newBlock = False
         if falling:
+            fallTime += dt
             fallSpeed += 2000*dt
             height += fallSpeed*dt
-            if height > screen_size[1]:
+            # On a new best, also wait for the new high score line to finish drawing
+            if height > screen_size[1] and (score <= highScore or fallTime >= 1.2):
                 running = False
                 gameStatus = "over"
         else:
@@ -221,6 +314,12 @@ def game():
                 placedBlocks[-1].fill((fade,255,fade))
             else:
                 placedBlocks[-1].fill((255,255,fade))
+
+        # High score lines (at the top of the block that would match the high score)
+        if highScore > 0:
+            draw_best_line(placedY[0]-50*(highScore-1),"BEST")
+        if falling and score > highScore:
+            draw_best_line(placedY[-1],"NEW BEST",min(fallTime/0.6,1))
 
         # Score
         show_score(score)
@@ -250,11 +349,16 @@ def game():
         
 # Main Function
 def main():
-    gameStatus = "ongoing"
+    highScore = load_high_score()
+    gameStatus = title_screen(highScore)
     while gameStatus == "ongoing":
-        gameStatus, score = game()
+        gameStatus, score = game(highScore)
+        newBest = score > highScore
+        if newBest:
+            highScore = score
+            save_high_score(highScore)
         if gameStatus == "over":
-            gameStatus = play_again(score)
+            gameStatus = play_again(score,highScore,newBest)
     pygame.quit()
 
 
