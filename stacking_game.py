@@ -46,7 +46,17 @@ def show_score(score):
 # Block Drawing Function (outlined so blocks stand out on any background)
 def draw_block(block,x,y):
     screen.blit(block,(x,y))
-    pygame.draw.rect(screen,(40,40,40),block.get_rect(topleft=(x,y)),2)
+    # The outline straddles the block's edge (1px outside, 1px inside), so where two blocks touch
+    # their outlines land on the same pixels and the seam is as thick as an outer edge
+    pygame.draw.rect(screen,(40,40,40),block.get_rect(topleft=(x,y)).inflate(2,2),2)
+
+# Chopped Piece Function (a piece of block that falls away from the stack, tipping toward the given side, -1 left or 1 right)
+def make_chopped_piece(x,y,width,color,side):
+    # Outline is part of the piece (matching draw_block's) so it fades along with it
+    piece = pygame.Surface((width+2,52),pygame.SRCALPHA)
+    piece.fill(color)
+    pygame.draw.rect(piece,(40,40,40),piece.get_rect(),2)
+    return {"surface":piece,"x":x-1,"y":y-1,"speedX":60*side,"speedY":0,"angle":0,"spin":-50*side,"alpha":255,"landed":False}
 
 # High Score Functions (a missing or unreadable file just means no high score yet)
 def load_high_score():
@@ -220,9 +230,9 @@ def game(highScore):
     blockWidth = 400
     newBlock = True
     falling = False
-    fallSpeed = 0
     fallTime = 0
     fadingBlocks = [] # recently placed blocks still fading from their highlight back to white
+    choppedPieces = [] # overhanging parts cut off imperfect placements, falling and fading away
     background_color = background_colors[0][1]
     # Stars as (x, y, radius, twinkle phase), placed once per game
     stars = [(random.uniform(0,screen_size[0]),random.uniform(0,screen_size[1]),random.choice((1,1,2)),random.uniform(0,2*math.pi)) for i in range(80)]
@@ -262,9 +272,10 @@ def game(highScore):
                     overlapXL = max(droppedXL,placedXL[-1])
                     overlapXR = min(droppedXR,placedXR[-1])
                     if overlapXR <= overlapXL:
-                        # Missed: let the block fall off the screen before ending the game
+                        # Missed: the whole block falls away like a chopped piece before the game ends
                         falling = True
-                        movingXL = droppedXL
+                        side = -1 if droppedXL < placedXL[-1] else 1
+                        choppedPieces.append(make_chopped_piece(droppedXL,height,blockWidth,(255,255,255),side))
                     else:
                         perfect = abs(droppedXL-placedXL[-1]) <= max(perfect_tolerance*blockWidth,perfect_min_tolerance)
                         if perfect:
@@ -279,6 +290,12 @@ def game(highScore):
                             if overlapXR > screen_size[0]:
                                 overlapXL -= overlapXR-screen_size[0]
                                 overlapXR = screen_size[0]
+                        else:
+                            # Chop off whatever hangs past the block below so it can fall away
+                            for pieceXL,pieceXR in ((droppedXL,overlapXL),(overlapXR,droppedXR)):
+                                if pieceXR > pieceXL:
+                                    side = -1 if pieceXL < overlapXL else 1
+                                    choppedPieces.append(make_chopped_piece(pieceXL,height,pieceXR-pieceXL,(255,255,0),side))
                         placedXL.append(overlapXL)
                         placedXR.append(overlapXR)
                         blockWidth = overlapXR-overlapXL
@@ -309,6 +326,8 @@ def game(highScore):
             groundDist += 50
             for i in range(len(placedY)):
                 placedY[i] += 50
+            for piece in choppedPieces:
+                piece["y"] += 50
 
         # Spawn new block
         if newBlock:
@@ -320,10 +339,8 @@ def game(highScore):
             newBlock = False
         if falling:
             fallTime += dt
-            fallSpeed += 2000*dt
-            height += fallSpeed*dt
-            # On a new best, also wait for the new high score line to finish drawing
-            if height > screen_size[1] and (score <= highScore or fallTime >= 1.2):
+            # Wait for the missed block to fade away (and on a new best, for the new high score line to finish drawing)
+            if not choppedPieces and (score <= highScore or fallTime >= 1.2):
                 running = False
                 gameStatus = "over"
         else:
@@ -331,9 +348,9 @@ def game(highScore):
             movingXR = movingXL+blockWidth
             if (direction == 1 and movingXR > screen_size[0]) or (direction == -1 and movingXL < 0):
                 direction *= -1
-        draw_block(block,movingXL,height)
+            draw_block(block,movingXL,height)
 
-        # Ground (drawn after the moving block so a missed block falls behind it)
+        # Ground
         screen.blit(ground,(0,screen_size[1]-ground_height+groundDist))
 
         # Blocks
@@ -348,6 +365,31 @@ def game(highScore):
             else:
                 fading["block"].fill((255,255,fading["fade"]))
         fadingBlocks = [fading for fading in fadingBlocks if fading["fade"] < 255]
+
+        # Chopped pieces: fall, drift away from the stack, tip over and fade out over 0.6s
+        groundTop = screen_size[1]-ground_height+groundDist
+        for piece in choppedPieces:
+            if piece["landed"]:
+                # Settle flat on the ground
+                piece["angle"] *= max(1-15*dt,0)
+            else:
+                piece["speedY"] += 1200*dt
+                piece["x"] += piece["speedX"]*dt
+                piece["y"] += piece["speedY"]*dt
+                piece["angle"] += piece["spin"]*dt
+            piece["alpha"] -= 255/0.6*dt
+            if piece["alpha"] > 0:
+                rotated = pygame.transform.rotate(piece["surface"],piece["angle"])
+                rotated.set_alpha(round(piece["alpha"]))
+                center = (piece["x"]+piece["surface"].get_width()/2,piece["y"]+piece["surface"].get_height()/2)
+                pieceRect = rotated.get_rect(center=center)
+                # Land on the ground instead of falling through it, and stay on it while settling flat
+                if piece["landed"] or pieceRect.bottom >= groundTop:
+                    piece["landed"] = True
+                    pieceRect.bottom = groundTop
+                    piece["y"] = pieceRect.centery-piece["surface"].get_height()/2
+                screen.blit(rotated,pieceRect)
+        choppedPieces = [piece for piece in choppedPieces if piece["alpha"] > 0]
 
         # High score lines (at the top of the block that would match the high score)
         if highScore > 0:
