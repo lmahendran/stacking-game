@@ -31,7 +31,7 @@ def get_latest_click():
     mouseClickX,mouseClickY = pygame.mouse.get_pos()
     return mouseClickX, mouseClickY
 
-# Pausing
+# Pausing (returns False if the window was closed while paused)
 def pause_game():
     unpaused = False
     cover = pygame.Surface(screen_size)
@@ -41,9 +41,13 @@ def pause_game():
     pygame.display.update()
     while not unpaused:
         for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return False
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_p:
                     unpaused = True
+        clock.tick(30)
+    return True
 
 # Play Again Function
 def play_again():
@@ -56,6 +60,9 @@ def play_again():
     pygame.display.update()
     while playAgain == "not picked":
         for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                playAgain = "picked"
+                gameStatus = "quit"
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mouseClickX,mouseClickY = get_latest_click()
                 if mouseClickX >= tryAgainCoords[0] and mouseClickX <= tryAgainCoords[0]+100 and mouseClickY >= tryAgainCoords[1] and mouseClickY <= tryAgainCoords[1] + 100:
@@ -63,13 +70,15 @@ def play_again():
                     gameStatus = "ongoing"
                 if mouseClickX >= quitCoords[0] and mouseClickX <= quitCoords[0]+100 and mouseClickY >= quitCoords[1] and mouseClickY <= quitCoords[1] + 100:
                     playAgain = "picked"
-                    gameStatus = "over"
+                    gameStatus = "quit"
+        clock.tick(30)
     return gameStatus
 
 # Initialization
 pygame.init()
 screen = pygame.display.set_mode(screen_size)
 pygame.display.set_caption(game_title)
+clock = pygame.time.Clock()
 ground = pygame.Surface((screen_size[0],ground_height))
 ground.fill(ground_color)
 
@@ -110,8 +119,8 @@ def game():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-                gameStatus = "over"
-                
+                gameStatus = "quit"
+
             if event.type == pygame.KEYDOWN:
 
                 if event.key == pygame.K_SPACE:
@@ -212,8 +221,10 @@ def game():
         elif score >= 50:
             background_color = (255,0,255)
 
-        if pause:
-            pause_game()
+        if pause and running:
+            if not pause_game():
+                running = False
+                gameStatus = "quit"
             pause = False
 
         sleep(0.005)
@@ -227,9 +238,10 @@ def main():
     gameStatus = "ongoing"
     while gameStatus == "ongoing":
         gameStatus = game()
-        if gameStatus != "ongoing":
+        if gameStatus == "over":
             gameStatus = play_again()
-    
+    pygame.quit()
+
 
 if __name__ == "__main__":
     main()
