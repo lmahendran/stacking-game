@@ -211,9 +211,7 @@ def game(highScore):
     falling = False
     fallSpeed = 0
     fallTime = 0
-    fade = 255
-    greenFade = False
-    faded = True
+    fadingBlocks = [] # recently placed blocks still fading from their highlight back to white
     background_color = screen_color
 
     # Game Loop
@@ -266,14 +264,12 @@ def game(highScore):
                         placedBlocks.append(pygame.Surface((blockWidth,50)))
                         block = pygame.Surface((blockWidth,50))
                         block.fill((255,255,255))
-                        faded = False
-                        fade = 0
+                        # Highlight green if perfect, yellow otherwise
                         if perfect:
-                            placedBlocks[-1].fill((fade,255,fade))
-                            greenFade = True
+                            placedBlocks[-1].fill((0,255,0))
                         else:
-                            placedBlocks[-1].fill((255,255,fade))
-                            greenFade = False
+                            placedBlocks[-1].fill((255,255,0))
+                        fadingBlocks.append({"block":placedBlocks[-1],"fade":0,"perfect":perfect})
                         placedY.append(height)
                         height -= 50
                         direction *= -1
@@ -320,17 +316,14 @@ def game(highScore):
         for placedBlock,x,y in zip(placedBlocks,placedXL,placedY):
             draw_block(placedBlock,x,y)
 
-        # Color fading
-        if not faded:
-            fade += 800*dt
-            if fade >= 255:
-                fade = 255
-                faded = True
-                greenFade = False
-            if greenFade:
-                placedBlocks[-1].fill((fade,255,fade))
+        # Color fading (each block fades on its own, so placing quickly doesn't leave one stuck mid-fade)
+        for fading in fadingBlocks:
+            fading["fade"] = min(fading["fade"]+800*dt,255)
+            if fading["perfect"]:
+                fading["block"].fill((fading["fade"],255,fading["fade"]))
             else:
-                placedBlocks[-1].fill((255,255,fade))
+                fading["block"].fill((255,255,fading["fade"]))
+        fadingBlocks = [fading for fading in fadingBlocks if fading["fade"] < 255]
 
         # High score lines (at the top of the block that would match the high score)
         if highScore > 0:
