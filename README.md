@@ -31,3 +31,11 @@ python stacking_game.py
 ## High score
 
 Your best score is saved to `highscore.txt` in the same folder as the game and shown on the title and game over screens. During a game, a red line marks the height you need to beat. Delete the file to reset your high score.
+
+## Music
+
+"Laserpack" Kevin MacLeod ([incompetech.com](https://incompetech.com))  
+Licensed under Creative Commons: By Attribution 4.0 License  
+http://creativecommons.org/licenses/by/4.0/
+
+The track is included unmodified as `laserpack.mp3` and plays while a game is in progress.

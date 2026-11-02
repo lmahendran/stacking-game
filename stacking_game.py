@@ -25,6 +25,9 @@ background_colors = [
     (100,(12,12,30)),
 ]
 stars_score = 100 # stars fade in from this score
+music_file = "laserpack.mp3" # "Laserpack" by Kevin MacLeod, in the same folder as this script; the game runs silently without it
+music_credit = "Music: Laserpack by Kevin MacLeod" # shown in the bottom right corner during a game
+music_volume = 0.5 # 0 to 1
 
 ## Modules
 import math
@@ -73,6 +76,33 @@ def save_high_score(score):
     except OSError:
         pass
 
+# Music Functions (a missing file or no audio device just means no music)
+def start_music():
+    try:
+        pygame.mixer.music.load(music_path)
+        pygame.mixer.music.set_volume(music_volume)
+        pygame.mixer.music.play(-1)
+    except (pygame.error,OSError):
+        pass
+
+def stop_music(fadeTime=0):
+    try:
+        if fadeTime > 0:
+            pygame.mixer.music.fadeout(fadeTime)
+        else:
+            pygame.mixer.music.stop()
+    except pygame.error:
+        pass
+
+def set_music_paused(paused):
+    try:
+        if paused:
+            pygame.mixer.music.pause()
+        else:
+            pygame.mixer.music.unpause()
+    except pygame.error:
+        pass
+
 # High Score Line Function (progress below 1 draws the line partway across, for the sweep animation)
 def draw_best_line(y,label,progress=1):
     lineEnd = screen_size[0]*progress
@@ -88,6 +118,7 @@ def draw_best_line(y,label,progress=1):
 # Pausing (returns False if the window was closed while paused)
 def pause_game():
     unpaused = False
+    set_music_paused(True)
     cover = pygame.Surface(screen_size)
     cover.fill(pause_color)
     cover.set_alpha(128)
@@ -101,6 +132,7 @@ def pause_game():
                 if event.key == pygame.K_p:
                     unpaused = True
         clock.tick(30)
+    set_music_paused(False)
     return True
 
 # Play Again Function
@@ -206,7 +238,9 @@ pygame.display.set_caption(game_title)
 clock = pygame.time.Clock()
 scoreFont = pygame.font.Font("freesansbold.ttf",64)
 labelFont = pygame.font.Font("freesansbold.ttf",20)
+creditFont = pygame.font.Font("freesansbold.ttf",14)
 high_score_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),high_score_file)
+music_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),music_file)
 ground = pygame.Surface((screen_size[0],ground_height))
 ground.fill(ground_color)
 
@@ -238,6 +272,7 @@ def game(highScore):
     stars = [(random.uniform(0,screen_size[0]),random.uniform(0,screen_size[1]),random.choice((1,1,2)),random.uniform(0,2*math.pi)) for i in range(80)]
     starFade = 0
     gameTime = 0
+    start_music()
 
     # Game Loop
     running = True
@@ -274,7 +309,8 @@ def game(highScore):
                     if overlapXR <= overlapXL:
                         # Missed: the whole block falls away like a chopped piece before the game ends
                         falling = True
-                        side = -1 if droppedXL < placedXL[-1] else 1
+                        stop_music(1000)
+                        side =-1 if droppedXL < placedXL[-1] else 1
                         choppedPieces.append(make_chopped_piece(droppedXL,height,blockWidth,(255,255,255),side))
                     else:
                         perfect = abs(droppedXL-placedXL[-1]) <= max(perfect_tolerance*blockWidth,perfect_min_tolerance)
@@ -400,6 +436,12 @@ def game(highScore):
         # Score
         show_score(score)
 
+        # Music credit
+        shadowText = creditFont.render(music_credit,True,(0,0,0))
+        screen.blit(shadowText,shadowText.get_rect(bottomright=(screen_size[0]-7,screen_size[1]-7)))
+        creditText = creditFont.render(music_credit,True,(255,255,255))
+        screen.blit(creditText,creditText.get_rect(bottomright=(screen_size[0]-8,screen_size[1]-8)))
+
         # Background change based on score, easing toward the new colour over about a second
         targetColor = background_colors[0][1]
         for bandScore,bandColor in background_colors:
@@ -417,6 +459,7 @@ def game(highScore):
             pause = False
 
         pygame.display.update()
+    stop_music()
     return gameStatus, score
         
 
